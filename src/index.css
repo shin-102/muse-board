@@ -6,6 +6,38 @@
 
 @layer base {
   :root {
+    /* Light Mode Defaults (Inverted from your current dark setup) */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 4%;
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 4%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 4%;
+    --primary: 0 0% 4%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 4%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 92%;
+    --accent-foreground: 0 0% 4%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 89%;
+    --input: 0 0% 89%;
+    --ring: 0 0% 4%;
+    --radius: 0.75rem;
+
+    --canvas-dot: 0 0% 80%;
+    --node-bg: 0 0% 100%;
+    --node-border: 0 0% 89%;
+    --node-shadow: 0 0% 90%;
+    --toolbar-bg: 0 0% 100%;
+    --toolbar-border: 0 0% 89%;
+  }
+
+  .dark {
+    /* Your original dark colors moved here */
     --background: 0 0% 4%;
     --foreground: 0 0% 92%;
     --card: 0 0% 8%;
@@ -25,7 +57,6 @@
     --border: 0 0% 16%;
     --input: 0 0% 16%;
     --ring: 0 0% 40%;
-    --radius: 0.75rem;
 
     --canvas-dot: 0 0% 20%;
     --node-bg: 0 0% 10%;
