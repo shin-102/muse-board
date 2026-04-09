@@ -1,37 +1,70 @@
-import { BoardProvider } from '@/contexts/BoardContext';
+import React from 'react';
+import { BoardProvider, useBoardContext } from '@/contexts/BoardContext';
 import Canvas from '@/components/board/Canvas';
 import Toolbar from '@/components/board/Toolbar';
 import { useTheme } from '@/components/ThemeProvider';
 import SideBar from '@/components/SideBar';
+import { useToast } from '@/hooks/use-toast';
+import { exportBoardData, importBoardData } from '@/lib/board-io';
 
-const Index = () => {
+const BoardLayout = () => {
   const { theme, setTheme } = useTheme();
+  const { nodes, connections, groups, panOffset, loadBoard } = useBoardContext();
+  const { toast } = useToast();
 
   const handleToggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
   };
 
+  const handleExport = () => {
+    if (nodes.length === 0) {
+      toast({ title: "Nothing to export", description: "Your board is empty!" });
+      return;
+    }
+    exportBoardData({ nodes, connections, groups, panOffset });
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const data = await importBoardData(file);
+      loadBoard(data);
+      toast({ title: "Import Successful", description: "Board loaded." });
+    } catch (err) {
+      toast({
+        title: "Import Failed",
+        description: "Invalid .json file.",
+        variant: "destructive"
+      });
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  return (
+    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
+      <SideBar
+        isDark={theme === "dark"}
+        toggleTheme={handleToggleTheme}
+        onExport={handleExport}
+        onImport={handleImport}
+      />
+
+      <main className="relative flex-1 h-full overflow-hidden">
+        <Canvas />
+        <Toolbar />
+      </main>
+    </div>
+  );
+};
+
+// Main Entry Point
+const Index = () => {
   return (
     <BoardProvider>
-      {/* Flex container:
-          h-screen ensures it takes full height.
-          w-screen + overflow-hidden prevents unwanted scrollbars.
-      */}
-      <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
-
-        {/* The Sidebar */}
-        <SideBar
-          isDark={theme === "dark"}
-          toggleTheme={handleToggleTheme}
-          // onExport and onImport will be added in the next step
-        />
-
-        {/* The Main Content Area */}
-        <main className="relative flex-1 h-full overflow-hidden">
-          <Canvas />
-          <Toolbar />
-        </main>
-      </div>
+      <BoardLayout />
     </BoardProvider>
   );
 };

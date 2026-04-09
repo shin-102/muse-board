@@ -1,3 +1,4 @@
+import { BoardData } from '@/lib/board-io';
 import React, {
   createContext, useContext, useState, useCallback, useMemo, type ReactNode,
 } from 'react';
@@ -70,6 +71,7 @@ interface BoardContextType {
   removeConnection: (id: string) => void;
   /** 'default' | 'crosshair' | 'cell' — used by Canvas for the background cursor */
   canvasCursor: 'default' | 'crosshair' | 'cell';
+  loadBoard: (data: { nodes: BoardNode[], connections: Connection[], groups: Group[], panOffset: Point }) => void;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -253,6 +255,19 @@ export const BoardProvider = ({ children }: { children: ReactNode }) => {
   const canvasCursor: BoardContextType['canvasCursor'] =
     pendingConnector ? 'cell' : connectorMode ? 'crosshair' : 'default';
 
+  // ── Board Loading ─────────────────────────────────────────────────────────────────
+
+  const loadBoard = useCallback((data: BoardData) => {
+    // We reset selection and modes for safety during import
+    setNodes(data.nodes || []);
+    setConnections(data.connections || []);
+    setGroups(data.groups || []);
+    setPanOffset(data.panOffset || { x: 0, y: 0 });
+    setSelectedIds(new Set());
+    setConnectorMode(false);
+    setPendingConnector(null);
+  }, []);
+
   // ── Value ─────────────────────────────────────────────────────────────────
 
   const value = useMemo<BoardContextType>(() => ({
@@ -267,7 +282,7 @@ export const BoardProvider = ({ children }: { children: ReactNode }) => {
     connectorMode, toggleConnectorMode,
     pendingConnector, handleConnectorClick,
     removeConnection,
-    canvasCursor,
+    canvasCursor, loadBoard
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
     nodes, connections, groups,

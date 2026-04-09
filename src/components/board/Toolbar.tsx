@@ -32,7 +32,11 @@ interface TBtnProps {
 }
 const TBtn = ({ onClick, title, active, danger, children, className = '' }: TBtnProps) => (
   <button
-    onClick={onClick}
+    // CRITICAL: use onMouseDown to prevent the button from stealing focus
+    onMouseDown={(e) => {
+      e.preventDefault();
+      onClick();
+    }}
     title={title}
     className={[
       'flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 shrink-0',
@@ -198,14 +202,16 @@ const SecondaryBar = () => {
           {FONT_SIZES.map((s) => (
             <button
               key={s}
-              onClick={() => updateNode(sel.id, { fontSize: s })}
+              onMouseDown={(e) => {
+                e.preventDefault(); // Stop focus from leaving the node
+                updateNode(sel.id, { fontSize: s }); // Trigger the update
+              }}
               className={[
                 'h-8 min-w-[2rem] rounded-lg px-1.5 text-xs transition-all duration-150 shrink-0 tabular-nums',
                 (sel.fontSize ?? 14) === s
                   ? 'bg-accent text-foreground font-semibold'
                   : 'text-muted-foreground hover:text-foreground hover:bg-accent',
               ].join(' ')}
-              title={`Font size ${s}`}
             >
               {s}
             </button>

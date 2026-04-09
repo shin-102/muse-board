@@ -69,10 +69,18 @@ const BoardNode = ({ node }: { node: BN }) => {
     // Register so Toolbar can reach this element
     activeEditRef.current = editRef.current;
 
-    editRef.current.focus();
-    const r = document.createRange(), s = window.getSelection();
-    r.selectNodeContents(editRef.current); r.collapse(false);
-    s?.removeAllRanges(); s?.addRange(r);
+    // Only force focus if we aren't already focused (prevents cursor jumping)
+    if (document.activeElement !== editRef.current) {
+      editRef.current.focus();
+
+      // Move cursor to the end of the text
+      const r = document.createRange();
+      const s = window.getSelection();
+      r.selectNodeContents(editRef.current);
+      r.collapse(false);
+      s?.removeAllRanges();
+      s?.addRange(r);
+    }
 
     return () => {
       // Clear when this edit session ends
@@ -248,21 +256,24 @@ const BoardNode = ({ node }: { node: BN }) => {
     if (connectorMode) return isPending ? 'cell' : 'crosshair';
     if (isEditing)     return 'text';
     if (isDragging)    return 'grabbing';
-    if (isText)        return 'text';
+
     return 'grab';
   })();
 
   // ── Styles ────────────────────────────────────────────────────────────────
 
   const outerStyle: React.CSSProperties = {
-    position: 'absolute', top: 0, left: 0,
+    position: 'absolute',
+    top: 0,
+    left: 0,
     transform: `translate3d(${node.x}px, ${node.y}px, 0) rotate(${node.rotation ?? 0}deg)`,
-    width:    node.width,
-    height:   isFlexH ? undefined : node.height,
+    width:     node.width,
+    height:    isFlexH ? undefined : node.height,
     minHeight: isFlexH ? (node.height ?? 80) : undefined,
-    zIndex:   node.zIndex,
+    zIndex:    node.zIndex,
     overflow: 'visible',
     cursor,
+    // This prevents accidental text selection while dragging or moving the mouse
     userSelect: isEditing ? 'text' : 'none',
   };
 

@@ -76,9 +76,18 @@ export const SideBar = ({ onExport, onImport, isDark, toggleTheme }: SideBarProp
 
       {/* Import */}
       <label className="cursor-pointer">
-        <TBtn title="Import JSON" showLabel={!isCollapsed} className="pointer-events-none">
+        {/* We use 'as="div"' or just change TBtn to not be a button to avoid nesting buttons in labels */}
+        <div
+          title="Import JSON"
+          className={cn(
+            'flex h-10 items-center rounded-xl transition-all duration-150 shrink-0 px-2.5',
+            'text-muted-foreground hover:text-foreground hover:bg-accent',
+            isCollapsed ? 'w-10 justify-center' : 'w-full justify-start gap-3'
+          )}
+        >
           <Upload size={18} />
-        </TBtn>
+          {!isCollapsed && <span className="text-sm font-medium truncate">Import JSON</span>}
+        </div>
         <input
           type="file"
           accept=".json"
