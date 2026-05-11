@@ -1,4 +1,4 @@
-# Muse-Board
+# Muse-Canvas
 
 A fast, minimal whiteboard for visual thinking. Drop images, text, sticky notes, and colour swatches onto an infinite canvas, draw connections between ideas, and present without clutter.
 
