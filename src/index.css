@@ -71,8 +71,18 @@
   * {
     @apply border-border;
   }
+
+  /* LOCK THE VIEWPORT */
+  html, body, #root {
+    @apply h-full w-full overflow-hidden;
+    position: fixed; /* Prevents "rubber-banding" on mobile */
+    inset: 0;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+    touch-action: none; /* Prevents the whole page from bouncing/moving */
+    -webkit-overflow-scrolling: none;
   }
 }

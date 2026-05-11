@@ -13,7 +13,7 @@ function rectsOverlap(
 
 type PointerOrigin = 'canvas' | 'ui';
 
-const GHOST_CLICK_WINDOW = 650; // ms
+const GHOST_CLICK_WINDOW = 150; // ms
 const GHOST_CLICK_DISTANCE = 36; // px
 
 const Canvas = ({ logoColorClass = 'text-neutral-800' }: { logoColorClass?: string }): JSX.Element => {
@@ -317,7 +317,7 @@ const Canvas = ({ logoColorClass = 'text-neutral-800' }: { logoColorClass?: stri
   return (
     <div
       ref={canvasRef}
-      className={`fixed inset-0 overflow-hidden transition-colors duration-500 ${presentationMode ? 'bg-black' : 'bg-background'}`}
+      className={`absolute inset-0 overflow-hidden transition-colors duration-500 ${presentationMode ? 'bg-black' : 'bg-background'}`}
       style={{ cursor, ...bgStyle, touchAction: 'none' }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

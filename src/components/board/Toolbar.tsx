@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useBoardContext } from '@/contexts/BoardContext';
 import { activeEditRef } from './BoardNode';
+import { createPortal } from 'react-dom';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -106,27 +107,32 @@ const TBtn = ({ onClick, title, active, danger, children, className = '' }: TBtn
     // Use onPointerDown so the button responds immediately on touch.
     // e.preventDefault() stops the button from blurring contentEditable nodes.
     onPointerDown={(e) => {
-      e.preventDefault();
+      // STOP propagation so the canvas doesn't think we are clicking it
       e.stopPropagation();
-      // Update last-ui timestamp / active flag again here to cover devices
-      // that may not consistently dispatch capture-phase events before the target handler; also refresh the timeout so UI-active remains set a
-      // short period after the interaction.
+      // We do NOT preventDefault here, so the 'click' event can still fire on mobile
+    }}
+    onClick={(e) => {
+      e.stopPropagation();
+      e.preventDefault();
+
+      // Move UI-Guard logic here
       try {
         const now = Date.now();
         (window as any).__muse_last_ui = now;
         document.documentElement.dataset.museLastUi = String(now);
         (window as any).__muse_ui_active = true;
-        try { document.documentElement.classList.add('muse-ui-active'); } catch (err) { /* ignore */ }
-        if ((window as any).__muse_ui_timeoutId) { clearTimeout((window as any).__muse_ui_timeoutId); }
+        document.documentElement.classList.add('muse-ui-active');
+
+        if ((window as any).__muse_ui_timeoutId) clearTimeout((window as any).__muse_ui_timeoutId);
         (window as any).__muse_ui_timeoutId = setTimeout(() => {
-          try { (window as any).__muse_ui_active = false; } catch (err) { /* ignore */ }
-          try { document.documentElement.classList.remove('muse-ui-active'); } catch (err) { /* ignore */ }
-        }, 700);
+          (window as any).__muse_ui_active = false;
+          document.documentElement.classList.remove('muse-ui-active');
+        }, 300); // Reduced to 300ms for better responsiveness
       } catch (err) { /* ignore */ }
+
       onClick();
     }}
     // Ensure clicks that arrive via other input paths don't bubble to the canvas
-    onClick={(e) => { e.stopPropagation(); }}
     title={title}
     style={{ touchAction: 'manipulation' }}
     className={[
@@ -227,8 +233,12 @@ const SecondaryBar = () => {
         <>
           <button
             data-muse-ui="true"
-            onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); fileRef.current?.click(); }}
-            onClick={(e) => { e.stopPropagation(); }}
+            onPointerDown={(e) => { e.stopPropagation(); }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              fileRef.current?.click();
+            }}
             style={{ touchAction: 'manipulation' }}
             className="flex items-center gap-2 h-10 rounded-xl px-3 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150 shrink-0"
             title="Replace image"
@@ -248,8 +258,13 @@ const SecondaryBar = () => {
             <button
               key={c}
               data-muse-ui="true"
-              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); updateNode(sel.id, { content: c }); setHex(c); }}
-              onClick={(e) => { e.stopPropagation(); }}
+              onPointerDown={(e) => { e.stopPropagation(); }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                updateNode(sel.id, { content: c });
+                setHex(c);
+              }}
               style={{
                 touchAction: 'manipulation',
                 backgroundColor: c,
@@ -262,8 +277,12 @@ const SecondaryBar = () => {
           <Div />
           <button
             data-muse-ui="true"
-            onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); colorRef.current?.click(); }}
-            onClick={(e) => { e.stopPropagation(); }}
+            onPointerDown={(e) => { e.stopPropagation(); }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              colorRef.current?.click();
+            }}
             style={{ touchAction: 'manipulation', backgroundColor: color }}
             className="relative h-6 w-6 rounded-full border-2 border-dashed border-border hover:border-foreground transition-colors shrink-0 overflow-hidden"
             title="Custom colour"
@@ -298,11 +317,13 @@ const SecondaryBar = () => {
               key={s}
               data-muse-ui="true"
               onPointerDown={(e) => {
+                e.stopPropagation();
+              }}
+              onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 updateNode(sel.id, { fontSize: s });
               }}
-              onClick={(e) => { e.stopPropagation(); }}
               style={{ touchAction: 'manipulation' }}
               className={[
                 'h-8 min-w-[2rem] rounded-lg px-1.5 text-xs transition-all duration-150 shrink-0 tabular-nums',
@@ -376,8 +397,12 @@ const Toolbar = () => {
     return (
       <button
         data-muse-ui="true"
-        onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); togglePresentationMode(); }}
-        onClick={(e) => { e.stopPropagation(); }}
+        onPointerDown={(e) => { e.stopPropagation(); }}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          togglePresentationMode();
+        }}
         style={{ touchAction: 'manipulation' }}
         className="fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-toolbar-bg/80 backdrop-blur-md border border-toolbar-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-200"
         title="Exit Presentation Mode"
@@ -400,13 +425,18 @@ const Toolbar = () => {
   })();
 
   return (
-    <div data-muse-ui="true" className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex flex-col items-center gap-2 max-w-[95vw]">
+    <div data-muse-ui="true" className="fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 flex flex-col items-center gap-2 max-w-[95vw]">
 
       {/* Secondary bar — only when selection or connector mode */}
       <SecondaryBar />
 
       {/* Primary bar */}
-      <div data-muse-ui="true" onPointerDown={(e) => e.stopPropagation()} style={{ touchAction: 'pan-x' }} className="flex items-center gap-1 rounded-2xl bg-toolbar-bg/80 backdrop-blur-md border border-toolbar-border px-2 py-2 shadow-2xl overflow-x-auto max-w-full">
+      <div
+        data-muse-ui="true"
+        onPointerDown={(e) => e.stopPropagation()}
+        style={{ touchAction: 'pan-x' }}
+        className="flex items-center gap-1 rounded-2xl bg-toolbar-bg/80 backdrop-blur-md border border-toolbar-border px-2 py-2 shadow-2xl overflow-x-auto sm:overflow-x-visible max-w-full"
+      >
 
         {/* CREATE */}
         <TBtn onClick={() => addNode('image')}  title="Add image">      <Image      className="h-5 w-5" /></TBtn>
@@ -442,26 +472,40 @@ const Toolbar = () => {
           <TBtn onClick={() => { if (nodes.length) setShowClear(true); }} title="Clear board" danger>
             <Trash2 className="h-5 w-5" />
           </TBtn>
-          {showClear && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-48 rounded-xl bg-popover border border-border p-3 shadow-2xl backdrop-blur-md">
-              <p className="text-xs text-foreground text-center mb-2">Clear entire board?</p>
-              <div className="flex gap-2">
-                <button
-                  data-muse-ui="true"
-                  onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowClear(false); }}
-                  onClick={(e) => { e.stopPropagation(); }}
-                  style={{ touchAction: 'manipulation' }}
-                  className="flex-1 rounded-lg bg-secondary text-foreground text-xs py-1.5 hover:bg-accent"
-                >Cancel</button>
-                <button
-                  data-muse-ui="true"
-                  onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); clearBoard(); setShowClear(false); }}
-                  onClick={(e) => { e.stopPropagation(); }}
-                  style={{ touchAction: 'manipulation' }}
-                  className="flex-1 rounded-lg bg-destructive text-destructive-foreground text-xs py-1.5 hover:opacity-90"
-                >Clear</button>
+
+          {showClear && createPortal(
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+              {/* Backdrop */}
+              <div
+                className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+                onClick={() => setShowClear(false)}
+              />
+
+              {/* The Prompt Box */}
+              <div
+                className="relative w-full max-w-[280px] rounded-2xl bg-popover border border-border p-6 shadow-2xl animate-in zoom-in-95"
+              >
+                <p className="text-sm font-medium text-center mb-6">Clear everything?</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowClear(false)}
+                    className="flex-1 rounded-xl bg-secondary py-3 text-xs font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      clearBoard();
+                      setShowClear(false);
+                    }}
+                    className="flex-1 rounded-xl bg-destructive text-destructive-foreground py-3 text-xs font-semibold"
+                  >
+                    Clear
+                  </button>
+                </div>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
         </div>
 

@@ -6,11 +6,13 @@ import { useTheme } from '@/components/ThemeProvider';
 import SideBar from '@/components/SideBar';
 import { useToast } from '@/hooks/use-toast';
 import { exportBoardData, importBoardData } from '@/lib/board-io';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const BoardLayout = () => {
   const { theme, setTheme } = useTheme();
   const { nodes, connections, groups, panOffset, loadBoard } = useBoardContext();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   const handleToggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
@@ -44,17 +46,26 @@ const BoardLayout = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
-      <SideBar
-        isDark={theme === "dark"}
-        toggleTheme={handleToggleTheme}
-        onExport={handleExport}
-        onImport={handleImport}
-      />
+    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground fixed inset-0">
+      {/* Added 'fixed inset-0' to lock the viewport against mobile keyboard/overscroll shifts */}
 
-      <main className="relative flex-1 h-full overflow-hidden">
-        <Canvas/>
-        <Toolbar />
+      <div className={`${isMobile ? 'fixed top-4 left-4 z-[60]' : 'relative'}`}>
+        <SideBar
+          isDark={theme === "dark"}
+          toggleTheme={handleToggleTheme}
+          onExport={handleExport}
+          onImport={handleImport}
+        />
+      </div>
+
+      {/* Crucial: added 'max-w-full' and changed overflow behavior */}
+      <main className="relative flex-1 h-full w-full overflow-hidden max-w-full">
+        <Canvas />
+        <div className="absolute bottom-6 left-0 right-0 flex justify-center pointer-events-none z-50">
+          <div className="pointer-events-auto">
+             <Toolbar />
+          </div>
+        </div>
       </main>
     </div>
   );

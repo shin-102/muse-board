@@ -161,7 +161,7 @@ const BoardNode = ({ node }: { node: BN }) => {
     if (connectorMode) return;
 
     e.preventDefault();
-    e.stopPropagation();
+    // e.stopPropagation();
 
     // ── Show "hover" state on touch so delete button appears ─────────────
     // On touch devices pointerType === 'touch'; we show the hover UI
@@ -260,23 +260,24 @@ const BoardNode = ({ node }: { node: BN }) => {
       case 'text':
       case 'sticky': {
         const base = isSticky ? 'font-serif text-neutral-800 dark:text-neutral-900' : 'text-foreground';
+        const safeContent = node.content ?? '';
         if (isEditing) {
           return (
             <div
               ref={editRef}
-              contentEditable suppressContentEditableWarning
+              contentEditable
+              suppressContentEditableWarning
               onBlur={commit}
               onKeyDown={onEditKey}
-              dangerouslySetInnerHTML={{ __html: editHtml }}
+              dangerouslySetInnerHTML={{ __html: editHtml ?? '' }} // Safety
               style={{ fontSize, lineHeight: 1.6, cursor: 'text' }}
               className={`w-full outline-none break-words whitespace-pre-wrap min-h-[2em] ${base}`}
-              spellCheck
             />
           );
         }
         return (
           <div
-            dangerouslySetInnerHTML={{ __html: node.content || '<span style="opacity:0.35">Double-tap to edit…</span>' }}
+            dangerouslySetInnerHTML={{ __html: safeContent || '<span style="opacity:0.35">Double-tap to edit…</span>' }}
             style={{ fontSize, lineHeight: 1.6, maxHeight: '100%' }}
             className={`w-full break-words whitespace-pre-wrap overflow-hidden ${base}`}
           />

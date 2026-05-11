@@ -56,7 +56,9 @@ Sticky          │           │                  │
 - **Focus Retention** — Toolbar buttons use `onMouseDown` preventing focus loss, allowing you to style text without losing your selection.
 - **Auto-Focus** — Changing font size while editing automatically re-focuses the text area.
 - **Smart Cursors** — The cursor stays as a `grab` hand for better UX, only switching to a `text` I-beam when actively editing.
-
+- **UI Portaling** — Critical UI overlays (like the Clear Board prompt) are rendered via React Portals to the document root. This prevents nested layout constraints and ensures zero horizontal scrolling on mobile browsers.
+- **Event Isolation** — Comprehensive use of `stopPropagation` and `onPointerDown` ensures that toolbar interactions never bleed through to the canvas background.
+- 
 ---
 
 ## Tech stack

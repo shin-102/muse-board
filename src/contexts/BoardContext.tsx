@@ -134,31 +134,31 @@ export const BoardProvider = ({ children }: { children: ReactNode }) => {
       const maxZ = prev.reduce((m, n) => Math.max(m, n.zIndex), 0);
       let nodeContent = content ?? '';
       let stickyColor: string | undefined;
-      let rotation:    number | undefined;
+      let rotation: number | undefined;
 
       switch (type) {
-        case 'image':        if (!content) nodeContent = pick(PLACEHOLDER_IMAGES); break;
-        case 'color-swatch': if (!content) nodeContent = pick(DEFAULT_COLORS);     break;
-        case 'text':         nodeContent = content ?? '';                           break;
+        case 'image': if (!content) nodeContent = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300'; break;
+        case 'color-swatch': if (!content) nodeContent = '#f43f5e'; break;
         case 'sticky':
-          nodeContent = content ?? '';
-          stickyColor = pick(STICKY_COLORS);
-          rotation    = (Math.random() - 0.5) * 6;
+          stickyColor = '50 100% 80%';
+          rotation = (Math.random() - 0.5) * 6;
           break;
       }
 
-      return [...prev, {
-        id:         crypto.randomUUID(),
+      const newNode: BoardNode = {
+        id: Math.random().toString(36).substring(2, 9) + Date.now().toString(36), // ? originally `crypto.randomUUID()`
         type,
-        x:          80 + Math.random() * 320,
-        y:          80 + Math.random() * 220,
-        content:    nodeContent,
-        zIndex:     maxZ + 1,
-        width:      type === 'image' ? 280 : type === 'color-swatch' ? 100 : type === 'sticky' ? 180 : 200,
-        height:     type === 'image' ? 200 : type === 'color-swatch' ? 100 : type === 'sticky' ? 180 : undefined,
+        x: 100 + (Math.random() * 50), // Standardized coordinates
+        y: 100 + (Math.random() * 50),
+        content: nodeContent,
+        zIndex: maxZ + 1,
+        width: type === 'image' ? 280 : type === 'color-swatch' ? 100 : type === 'sticky' ? 180 : 200,
+        height: type === 'image' ? 200 : type === 'color-swatch' ? 100 : type === 'sticky' ? 180 : undefined,
         stickyColor,
         rotation,
-      }];
+      };
+
+      return [...prev, newNode];
     });
   }, []);
 
@@ -236,7 +236,9 @@ export const BoardProvider = ({ children }: { children: ReactNode }) => {
           (c) => (c.fromId === pendingConnector && c.toId === id)
               || (c.fromId === id && c.toId === pendingConnector),
         );
-        return exists ? prev : [...prev, { id: crypto.randomUUID(), fromId: pendingConnector, toId: id }];
+        // Use a compatible ID generator instead of crypto.randomUUID()
+        const connectionId = `conn-${Math.random().toString(36).substr(2, 9)}`;
+        return exists ? prev : [...prev, { id: connectionId, fromId: pendingConnector, toId: id }];
       });
     }
 
