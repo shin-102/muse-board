@@ -30,14 +30,105 @@ interface TBtnProps {
   children: React.ReactNode;
   className?: string;
 }
+
+// TBtn uses onPointerDown with `touch-action: manipulation` so it works on
+// both mouse (desktop) and touch (mobile) without stealing focus from editing nodes.
+// We add an explicit data attribute and stop propagation so UI interactions are
+// clearly identifiable as UI-origin and won't accidentally drive canvas logic.
 const TBtn = ({ onClick, title, active, danger, children, className = '' }: TBtnProps) => (
   <button
-    // CRITICAL: use onMouseDown to prevent the button from stealing focus
-    onMouseDown={(e) => {
+    data-muse-ui="true"
+    // Capture-phase handlers: mark a short-lived global “UI active” flag and
+    // dispatch a `muse-ui-activate` event so the Canvas (and any other listener)
+    // can react to UI interactions quickly and robustly. We also toggle a CSS
+    // class on the documentElement (`muse-ui-active`) so downstream listeners
+    // that rely on a simple DOM-class check can detect UI activity.
+    onPointerDownCapture={(e) => {
+      try {
+        const now = Date.now();
+        (window as any).__muse_last_ui = now;
+        document.documentElement.dataset.museLastUi = String(now);
+        // set a short-lived UI-active flag and clear any previous timer
+        (window as any).__muse_ui_active = true;
+        // add class so canvas can quickly check `.classList.contains('muse-ui-active')`
+        try { document.documentElement.classList.add('muse-ui-active'); } catch (err) { /* ignore */ }
+        if ((window as any).__muse_ui_timeoutId) { clearTimeout((window as any).__muse_ui_timeoutId); }
+        (window as any).__muse_ui_timeoutId = setTimeout(() => {
+          try { (window as any).__muse_ui_active = false; } catch (err) { /* ignore */ }
+          try { document.documentElement.classList.remove('muse-ui-active'); } catch (err) { /* ignore */ }
+        }, 700);
+        // Dispatch a CustomEvent to signal UI activation. Include a small rect
+        // summary if possible so listeners can make spatial decisions.
+        try {
+          const t = e.target as HTMLElement | null;
+          let rectDetail = null;
+          if (t && t.getBoundingClientRect) {
+            const r = t.getBoundingClientRect();
+            rectDetail = { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+          }
+          const ev = new CustomEvent('muse-ui-activate', { detail: { time: now, rect: rectDetail } });
+          document.dispatchEvent(ev);
+        } catch (err) { /* ignore details if dispatch fails */ }
+      } catch (err) { /* ignore */ }
+      e.stopPropagation();
+    }}
+    onTouchStartCapture={(e) => {
+      try {
+        const now = Date.now();
+        (window as any).__muse_last_ui = now;
+        document.documentElement.dataset.museLastUi = String(now);
+        // set UI-active flag and schedule clear
+        (window as any).__muse_ui_active = true;
+        // add class for quick DOM guard
+        try { document.documentElement.classList.add('muse-ui-active'); } catch (err) { /* ignore */ }
+        if ((window as any).__muse_ui_timeoutId) { clearTimeout((window as any).__muse_ui_timeoutId); }
+        (window as any).__muse_ui_timeoutId = setTimeout(() => {
+          try { (window as any).__muse_ui_active = false; } catch (err) { /* ignore */ }
+          try { document.documentElement.classList.remove('muse-ui-active'); } catch (err) { /* ignore */ }
+        }, 700);
+        // Dispatch muse-ui-activate event for touchstart as well
+        try {
+          const t0 = e.touches && e.touches[0];
+          let rectDetail = null;
+          const t = e.target as HTMLElement | null;
+          if (t && t.getBoundingClientRect) {
+            const r = t.getBoundingClientRect();
+            rectDetail = { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+          } else if (t0 && typeof t0.clientX === 'number' && typeof t0.clientY === 'number') {
+            rectDetail = { x: t0.clientX, y: t0.clientY };
+          }
+          const ev = new CustomEvent('muse-ui-activate', { detail: { time: now, rect: rectDetail } });
+          document.dispatchEvent(ev);
+        } catch (err) { /* ignore details if dispatch fails */ }
+      } catch (err) { /* ignore */ }
+      e.stopPropagation();
+    }}
+    // Use onPointerDown so the button responds immediately on touch.
+    // e.preventDefault() stops the button from blurring contentEditable nodes.
+    onPointerDown={(e) => {
       e.preventDefault();
+      e.stopPropagation();
+      // Update last-ui timestamp / active flag again here to cover devices
+      // that may not consistently dispatch capture-phase events before the target handler; also refresh the timeout so UI-active remains set a
+      // short period after the interaction.
+      try {
+        const now = Date.now();
+        (window as any).__muse_last_ui = now;
+        document.documentElement.dataset.museLastUi = String(now);
+        (window as any).__muse_ui_active = true;
+        try { document.documentElement.classList.add('muse-ui-active'); } catch (err) { /* ignore */ }
+        if ((window as any).__muse_ui_timeoutId) { clearTimeout((window as any).__muse_ui_timeoutId); }
+        (window as any).__muse_ui_timeoutId = setTimeout(() => {
+          try { (window as any).__muse_ui_active = false; } catch (err) { /* ignore */ }
+          try { document.documentElement.classList.remove('muse-ui-active'); } catch (err) { /* ignore */ }
+        }, 700);
+      } catch (err) { /* ignore */ }
       onClick();
     }}
+    // Ensure clicks that arrive via other input paths don't bubble to the canvas
+    onClick={(e) => { e.stopPropagation(); }}
     title={title}
+    style={{ touchAction: 'manipulation' }}
     className={[
       'flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 shrink-0',
       active ? 'bg-accent text-foreground'
@@ -52,9 +143,6 @@ const TBtn = ({ onClick, title, active, danger, children, className = '' }: TBtn
 );
 
 // ─── execCommand helper ───────────────────────────────────────────────────────
-// Applies a rich-text command to whatever contentEditable is currently active.
-// Works whether the node is mid-edit (activeEditRef set) or the user clicked
-// a toolbar button while the node retained focus.
 
 function fmt(cmd: string) {
   const el = activeEditRef.current;
@@ -62,7 +150,6 @@ function fmt(cmd: string) {
     el.focus();
     document.execCommand(cmd, false);
   } else {
-    // Fallback: try the document's active element if it's a contentEditable
     const ae = document.activeElement as HTMLElement | null;
     if (ae?.isContentEditable) document.execCommand(cmd, false);
   }
@@ -90,7 +177,6 @@ const SecondaryBar = () => {
   const isImage  = sel?.type === 'image';
   const color    = isSwatch ? sel!.content : '#ffffff';
 
-  // Hidden when nothing is happening
   if (!hasAny && !connectorMode) return null;
 
   const applyHex = (raw: string) => {
@@ -109,7 +195,7 @@ const SecondaryBar = () => {
   // ── Connector mode hijacks the bar ────────────────────────────────────────
   if (connectorMode) {
     return (
-      <div className="flex items-center gap-2 rounded-2xl bg-toolbar-bg/80 backdrop-blur-md border border-toolbar-border px-4 py-2 shadow-2xl">
+      <div data-muse-ui="true" onPointerDown={(e) => e.stopPropagation()} style={{ touchAction: 'manipulation' }} className="flex items-center gap-2 rounded-2xl bg-toolbar-bg/80 backdrop-blur-md border border-toolbar-border px-4 py-2 shadow-2xl">
         <span className={[
           'h-2 w-2 rounded-full shrink-0',
           pendingConnector ? 'bg-blue-500 animate-pulse' : 'bg-muted-foreground',
@@ -120,7 +206,9 @@ const SecondaryBar = () => {
             : 'Click any node to start a connection'}
         </span>
         <button
-          onClick={toggleConnectorMode}
+          data-muse-ui="true"
+          onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleConnectorMode(); }}
+          style={{ touchAction: 'manipulation' }}
           className="ml-2 flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
           title="Cancel"
         >
@@ -132,13 +220,16 @@ const SecondaryBar = () => {
 
   // ── Node editing bar ──────────────────────────────────────────────────────
   return (
-    <div className="flex items-center gap-1 rounded-2xl bg-toolbar-bg/80 backdrop-blur-md border border-toolbar-border px-2 py-2 shadow-2xl">
+    <div data-muse-ui="true" onPointerDown={(e) => e.stopPropagation()} style={{ touchAction: 'pan-x' }} className="flex items-center gap-1 rounded-2xl bg-toolbar-bg/80 backdrop-blur-md border border-toolbar-border px-2 py-2 shadow-2xl max-w-[95vw] overflow-x-auto">
 
       {/* ── IMAGE ──────────────────────────────────────────────────────────── */}
       {isImage && sel && (
         <>
           <button
-            onClick={() => fileRef.current?.click()}
+            data-muse-ui="true"
+            onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); fileRef.current?.click(); }}
+            onClick={(e) => { e.stopPropagation(); }}
+            style={{ touchAction: 'manipulation' }}
             className="flex items-center gap-2 h-10 rounded-xl px-3 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150 shrink-0"
             title="Replace image"
           >
@@ -156,20 +247,25 @@ const SecondaryBar = () => {
           {PRESET_COLORS.map((c) => (
             <button
               key={c}
-              onClick={() => { updateNode(sel.id, { content: c }); setHex(c); }}
-              className="h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 shrink-0"
+              data-muse-ui="true"
+              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); updateNode(sel.id, { content: c }); setHex(c); }}
+              onClick={(e) => { e.stopPropagation(); }}
               style={{
+                touchAction: 'manipulation',
                 backgroundColor: c,
                 borderColor: color === c ? 'hsl(var(--foreground))' : 'transparent',
               }}
+              className="h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 shrink-0"
               title={c}
             />
           ))}
           <Div />
           <button
-            onClick={() => colorRef.current?.click()}
+            data-muse-ui="true"
+            onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); colorRef.current?.click(); }}
+            onClick={(e) => { e.stopPropagation(); }}
+            style={{ touchAction: 'manipulation', backgroundColor: color }}
             className="relative h-6 w-6 rounded-full border-2 border-dashed border-border hover:border-foreground transition-colors shrink-0 overflow-hidden"
-            style={{ backgroundColor: color }}
             title="Custom colour"
           >
             <input
@@ -194,18 +290,20 @@ const SecondaryBar = () => {
       {/* ── TEXT / STICKY ──────────────────────────────────────────────────── */}
       {isText && sel && (
         <>
-          {/* Formatting */}
           <TBtn onClick={() => fmt('bold')}   title="Bold (Ctrl+B)">   <Bold   className="h-4 w-4" /></TBtn>
           <TBtn onClick={() => fmt('italic')} title="Italic (Ctrl+I)"> <Italic className="h-4 w-4" /></TBtn>
           <Div />
-          {/* Font size */}
           {FONT_SIZES.map((s) => (
             <button
               key={s}
-              onMouseDown={(e) => {
-                e.preventDefault(); // Stop focus from leaving the node
-                updateNode(sel.id, { fontSize: s }); // Trigger the update
+              data-muse-ui="true"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                updateNode(sel.id, { fontSize: s });
               }}
+              onClick={(e) => { e.stopPropagation(); }}
+              style={{ touchAction: 'manipulation' }}
               className={[
                 'h-8 min-w-[2rem] rounded-lg px-1.5 text-xs transition-all duration-150 shrink-0 tabular-nums',
                 (sel.fontSize ?? 14) === s
@@ -261,10 +359,6 @@ const SecondaryBar = () => {
 };
 
 // ─── Primary toolbar ──────────────────────────────────────────────────────────
-//
-//   CREATE         │ SECONDARY    │ ARRANGE          │ CANVAS
-//   Image  Text    │ Swatch       │ Connector  Group │ Present  Clear
-//   Sticky         │              │                  │
 
 const Toolbar = () => {
   const {
@@ -281,7 +375,10 @@ const Toolbar = () => {
   if (presentationMode) {
     return (
       <button
-        onClick={togglePresentationMode}
+        data-muse-ui="true"
+        onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); togglePresentationMode(); }}
+        onClick={(e) => { e.stopPropagation(); }}
+        style={{ touchAction: 'manipulation' }}
         className="fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-toolbar-bg/80 backdrop-blur-md border border-toolbar-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-200"
         title="Exit Presentation Mode"
       >
@@ -303,13 +400,13 @@ const Toolbar = () => {
   })();
 
   return (
-    <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex flex-col items-center gap-2">
+    <div data-muse-ui="true" className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex flex-col items-center gap-2 max-w-[95vw]">
 
       {/* Secondary bar — only when selection or connector mode */}
       <SecondaryBar />
 
       {/* Primary bar */}
-      <div className="flex items-center gap-1 rounded-2xl bg-toolbar-bg/80 backdrop-blur-md border border-toolbar-border px-2 py-2 shadow-2xl">
+      <div data-muse-ui="true" onPointerDown={(e) => e.stopPropagation()} style={{ touchAction: 'pan-x' }} className="flex items-center gap-1 rounded-2xl bg-toolbar-bg/80 backdrop-blur-md border border-toolbar-border px-2 py-2 shadow-2xl overflow-x-auto max-w-full">
 
         {/* CREATE */}
         <TBtn onClick={() => addNode('image')}  title="Add image">      <Image      className="h-5 w-5" /></TBtn>
@@ -349,10 +446,20 @@ const Toolbar = () => {
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-48 rounded-xl bg-popover border border-border p-3 shadow-2xl backdrop-blur-md">
               <p className="text-xs text-foreground text-center mb-2">Clear entire board?</p>
               <div className="flex gap-2">
-                <button onClick={() => setShowClear(false)}
-                  className="flex-1 rounded-lg bg-secondary text-foreground text-xs py-1.5 hover:bg-accent">Cancel</button>
-                <button onClick={() => { clearBoard(); setShowClear(false); }}
-                  className="flex-1 rounded-lg bg-destructive text-destructive-foreground text-xs py-1.5 hover:opacity-90">Clear</button>
+                <button
+                  data-muse-ui="true"
+                  onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowClear(false); }}
+                  onClick={(e) => { e.stopPropagation(); }}
+                  style={{ touchAction: 'manipulation' }}
+                  className="flex-1 rounded-lg bg-secondary text-foreground text-xs py-1.5 hover:bg-accent"
+                >Cancel</button>
+                <button
+                  data-muse-ui="true"
+                  onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); clearBoard(); setShowClear(false); }}
+                  onClick={(e) => { e.stopPropagation(); }}
+                  style={{ touchAction: 'manipulation' }}
+                  className="flex-1 rounded-lg bg-destructive text-destructive-foreground text-xs py-1.5 hover:opacity-90"
+                >Clear</button>
               </div>
             </div>
           )}

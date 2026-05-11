@@ -53,7 +53,7 @@ const BoardLayout = () => {
       />
 
       <main className="relative flex-1 h-full overflow-hidden">
-        <Canvas />
+        <Canvas/>
         <Toolbar />
       </main>
     </div>

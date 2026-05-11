@@ -6,11 +6,12 @@ import { X } from 'lucide-react';
 import { BoardNode as BN, useBoardContext } from '@/contexts/BoardContext';
 
 // ─── Active edit ref ──────────────────────────────────────────────────────────
-// A module-level ref that always points to the contentEditable div of whichever
-// node is currently being edited (null when nothing is in edit mode).
-// Toolbar.tsx imports this to call document.execCommand on the right element.
 
 export const activeEditRef: { current: HTMLDivElement | null } = { current: null };
+
+// ─── Double-tap detection threshold (ms) ─────────────────────────────────────
+
+const DOUBLE_TAP_MS = 300;
 
 // ─── BoardNode ────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,10 @@ const BoardNode = ({ node }: { node: BN }) => {
   const editRef  = useRef<HTMLDivElement>(null);
   const fileRef  = useRef<HTMLInputElement>(null);
 
+  // ── Double-tap tracking ───────────────────────────────────────────────────
+  const lastTapTime  = useRef<number>(0);
+  const lastTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const fontSize   = node.fontSize ?? 14;
   const isSelected = selectedIds.has(node.id);
   const isPending  = pendingConnector === node.id;
@@ -44,7 +49,7 @@ const BoardNode = ({ node }: { node: BN }) => {
     movers: Array<{ id: string; el: HTMLDivElement | null; ox: number; oy: number }>;
   } | null>(null);
 
-  // ── ResizeObserver: keep renderedHeight in sync for connection anchors ────
+  // ── ResizeObserver ────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!cardRef.current || !isFlexH) return;
@@ -65,15 +70,9 @@ const BoardNode = ({ node }: { node: BN }) => {
 
   useEffect(() => {
     if (!isEditing || !editRef.current) return;
-
-    // Register so Toolbar can reach this element
     activeEditRef.current = editRef.current;
-
-    // Only force focus if we aren't already focused (prevents cursor jumping)
     if (document.activeElement !== editRef.current) {
       editRef.current.focus();
-
-      // Move cursor to the end of the text
       const r = document.createRange();
       const s = window.getSelection();
       r.selectNodeContents(editRef.current);
@@ -81,9 +80,7 @@ const BoardNode = ({ node }: { node: BN }) => {
       s?.removeAllRanges();
       s?.addRange(r);
     }
-
     return () => {
-      // Clear when this edit session ends
       if (activeEditRef.current === editRef.current) activeEditRef.current = null;
     };
   }, [isEditing]);
@@ -117,24 +114,30 @@ const BoardNode = ({ node }: { node: BN }) => {
     reader.readAsDataURL(f); e.target.value = '';
   };
 
-  // ── Interactions ──────────────────────────────────────────────────────────
+  // ── Enter editing mode ────────────────────────────────────────────────────
 
-  const onDoubleClick = (e: RME) => {
-    if (presentationMode) return;
-    if (connectorMode) return;
+  const enterEditMode = useCallback(() => {
+    if (presentationMode || connectorMode) return;
     switch (node.type) {
       case 'text':
       case 'sticky':
-        e.stopPropagation();
         setIsEditing(true);
         setEditHtml(node.content);
         break;
       case 'image':
-        e.stopPropagation();
         fileRef.current?.click();
         break;
     }
+  }, [presentationMode, connectorMode, node.type, node.content]);
+
+  // ── Double-click (desktop) ────────────────────────────────────────────────
+
+  const onDoubleClick = (e: RME) => {
+    e.stopPropagation();
+    enterEditMode();
   };
+
+  // ── Connector click ───────────────────────────────────────────────────────
 
   const onClick = (e: RME) => {
     if (!connectorMode) return;
@@ -142,7 +145,14 @@ const BoardNode = ({ node }: { node: BN }) => {
     handleConnectorClick(node.id);
   };
 
-  // ── Drag ──────────────────────────────────────────────────────────────────
+  // ── Drag + double-tap (pointer events) ───────────────────────────────────
+  //
+  // We handle double-tap here on pointerDown because:
+  //  1. dblclick doesn't fire reliably on mobile touch
+  //  2. We can detect double-tap timing before any drag starts
+  //
+  // Logic: if two taps arrive within DOUBLE_TAP_MS on the same node
+  // and the pointer barely moved, treat it as a double-tap → edit.
 
   const onPD = (e: RPE<HTMLDivElement>) => {
     if (isEditing) return;
@@ -153,6 +163,29 @@ const BoardNode = ({ node }: { node: BN }) => {
     e.preventDefault();
     e.stopPropagation();
 
+    // ── Show "hover" state on touch so delete button appears ─────────────
+    // On touch devices pointerType === 'touch'; we show the hover UI
+    // immediately on tap (it will clear on pointerUp if no drag happened).
+    if (e.pointerType === 'touch') {
+      setIsHovered(true);
+    }
+
+    // ── Double-tap detection ──────────────────────────────────────────────
+    const now = Date.now();
+    const gap  = now - lastTapTime.current;
+    if (gap < DOUBLE_TAP_MS && gap > 0) {
+      // Double-tap confirmed
+      if (lastTapTimer.current) { clearTimeout(lastTapTimer.current); lastTapTimer.current = null; }
+      lastTapTime.current = 0;
+      enterEditMode();
+      return;
+    }
+    lastTapTime.current = now;
+    // Auto-clear so a slow single tap doesn't linger
+    if (lastTapTimer.current) clearTimeout(lastTapTimer.current);
+    lastTapTimer.current = setTimeout(() => { lastTapTime.current = 0; }, DOUBLE_TAP_MS + 50);
+
+    // ── Shift-tap: toggle selection ───────────────────────────────────────
     if (e.shiftKey) {
       setSelectedIds((prev) => {
         const s = new Set(prev);
@@ -193,6 +226,13 @@ const BoardNode = ({ node }: { node: BN }) => {
   };
 
   const onPU = (e: RPE<HTMLDivElement>) => {
+    // On touch: hide the "hover" state when the finger lifts
+    // (unless we had a drag, in which case selection state handles visibility)
+    if (e.pointerType === 'touch') {
+      // Small delay so taps can still trigger the delete button before it vanishes
+      setTimeout(() => setIsHovered(false), 1500);
+    }
+
     if (!drag.current) return;
     const dx = e.clientX - drag.current.startX, dy = e.clientY - drag.current.startY;
     drag.current.movers.forEach((m) => { if (m.el) m.el.style.willChange = 'auto'; });
@@ -236,7 +276,7 @@ const BoardNode = ({ node }: { node: BN }) => {
         }
         return (
           <div
-            dangerouslySetInnerHTML={{ __html: node.content || '<span style="opacity:0.35">Double-click to edit…</span>' }}
+            dangerouslySetInnerHTML={{ __html: node.content || '<span style="opacity:0.35">Double-tap to edit…</span>' }}
             style={{ fontSize, lineHeight: 1.6, maxHeight: '100%' }}
             className={`w-full break-words whitespace-pre-wrap overflow-hidden ${base}`}
           />
@@ -256,7 +296,6 @@ const BoardNode = ({ node }: { node: BN }) => {
     if (connectorMode) return isPending ? 'cell' : 'crosshair';
     if (isEditing)     return 'text';
     if (isDragging)    return 'grabbing';
-
     return 'grab';
   })();
 
@@ -273,8 +312,9 @@ const BoardNode = ({ node }: { node: BN }) => {
     zIndex:    node.zIndex,
     overflow: 'visible',
     cursor,
-    // This prevents accidental text selection while dragging or moving the mouse
     userSelect: isEditing ? 'text' : 'none',
+    // Prevent browser's native touch actions (scroll, zoom) while dragging nodes
+    touchAction: 'none',
   };
 
   const cardClass = [
@@ -291,6 +331,9 @@ const BoardNode = ({ node }: { node: BN }) => {
     'transition-shadow transition-transform duration-200',
   ].filter(Boolean).join(' ');
 
+  // ── Show delete button when: hovered (desktop) OR selected (mobile touch) ──
+  const showDeleteBtn = (isHovered || isSelected) && !presentationMode && !isEditing;
+
   return (
     <div
       id={`board-node-${node.id}`}
@@ -305,8 +348,8 @@ const BoardNode = ({ node }: { node: BN }) => {
       onDoubleClick={onDoubleClick}
       onClick={onClick}
     >
-      {/* Delete button */}
-      {isHovered && !presentationMode && !isEditing && (
+      {/* Delete button — visible on hover (desktop) or selection (touch) */}
+      {showDeleteBtn && (
         <button
           data-no-drag
           onPointerDown={(e) => e.stopPropagation()}

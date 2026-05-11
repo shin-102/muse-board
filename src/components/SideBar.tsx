@@ -50,7 +50,7 @@ export const SideBar = ({ onExport, onImport, isDark, toggleTheme }: SideBarProp
   return (
     <aside
       className={cn(
-        "fixed left-4 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-1 p-2",
+        "fixed left-4 top-4 md:top-1/2 md:-translate-y-1/2 z-50 flex flex-col gap-1 p-2",
         "rounded-2xl bg-toolbar-bg/80 backdrop-blur-md border border-toolbar-border shadow-2xl",
         "transition-all duration-300 ease-in-out",
         isCollapsed ? "w-14" : "w-48"
